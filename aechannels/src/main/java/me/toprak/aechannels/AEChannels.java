@@ -12,7 +12,12 @@ import net.luckperms.api.LuckPerms;
 import net.luckperms.api.LuckPermsProvider;
 import net.luckperms.api.model.user.User;
 
+import me.clip.placeholderapi.PlaceholderAPI;
+
 import org.bukkit.Bukkit;
+import org.bukkit.ChatColor;
+import org.bukkit.Sound;
+import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
@@ -24,6 +29,7 @@ import java.util.*;
 public class AEChannels extends JavaPlugin implements Listener {
 
     private Map<String, ChatChannel> chatChannels = new HashMap<>();
+    private Map<String, String> groupPrefixes = new HashMap<>();
     private String localPrefix;
     private String regionPrefix;
     private List<String> allowedRegions;
@@ -31,6 +37,15 @@ public class AEChannels extends JavaPlugin implements Listener {
     private boolean useLpcPrefix;
 
     private LuckPerms luckPermsApi;
+    private boolean placeholderApiEnabled = false;
+
+    // Mention config ayarları
+    private boolean mentionEnabled;
+    private String mentionMessage;
+    private boolean mentionSoundEnabled;
+    private String mentionSoundName;
+    private float mentionSoundVolume;
+    private float mentionSoundPitch;
 
     @Override
     public void onEnable() {
@@ -39,18 +54,25 @@ public class AEChannels extends JavaPlugin implements Listener {
         getServer().getPluginManager().registerEvents(this, this);
         getLogger().info("aeChannels enabled!");
 
-        // LuckPerms API instance al
         try {
             luckPermsApi = LuckPermsProvider.get();
-            getLogger().info("LuckPerms API found and hooked!");
+            getLogger().info("LuckPerms API hooked successfully!");
         } catch (IllegalStateException e) {
             luckPermsApi = null;
-            getLogger().warning("LuckPerms API bulunamadı, LPC prefix desteği devre dışı!");
+            getLogger().warning("LuckPerms API not found, LPC prefix support disabled!");
+        }
+
+        placeholderApiEnabled = Bukkit.getPluginManager().getPlugin("PlaceholderAPI") != null;
+        if (placeholderApiEnabled) {
+            getLogger().info("PlaceholderAPI detected and enabled!");
+        } else {
+            getLogger().warning("PlaceholderAPI not found! Placeholder support disabled.");
         }
     }
 
     private void loadConfig() {
         chatChannels.clear();
+
         String gSymbol = getConfig().getString("chatChannels.global.symbol", "!");
         String gPrefix = getConfig().getString("chatChannels.global.prefix", "[GLOBAL]");
         chatChannels.put(gSymbol, new ChatChannel(gSymbol, gPrefix));
@@ -66,24 +88,55 @@ public class AEChannels extends JavaPlugin implements Listener {
         regionCommand = getConfig().getString("chatChannels.region.region-command", "");
 
         useLpcPrefix = getConfig().getBoolean("chatChannels.use-lpc-prefix", false);
+
+        ConfigurationSection groupSec = getConfig().getConfigurationSection("chatChannels.groupPrefixes");
+        if (groupSec != null) {
+            for (String key : groupSec.getKeys(false)) {
+                groupPrefixes.put(key.toLowerCase(), groupSec.getString(key));
+            }
+        }
+
+        // Mention config ayarlarını oku
+        mentionEnabled = getConfig().getBoolean("mention.enabled", false);
+        mentionMessage = getConfig().getString("mention.message", "&e@{player} seni etiketledi!");
+        mentionSoundEnabled = getConfig().getBoolean("mention.sound.enabled", false);
+        mentionSoundName = getConfig().getString("mention.sound.name", "ENTITY_PLAYER_LEVELUP");
+        mentionSoundVolume = (float) getConfig().getDouble("mention.sound.volume", 1.0);
+        mentionSoundPitch = (float) getConfig().getDouble("mention.sound.pitch", 1.0);
     }
 
-    // Prefix formatlama fonksiyonu
-    private String formatPrefix(Player player, String channelPrefix) {
-        if (luckPermsApi == null || !useLpcPrefix) {
-            return channelPrefix; // LPC yok veya devre dışı ise sadece kanal prefixi
-        }
-
+    private String getPrimaryGroup(Player player) {
+        if (luckPermsApi == null) return "default";
         User user = luckPermsApi.getUserManager().getUser(player.getUniqueId());
-        if (user == null) return channelPrefix;
+        if (user == null) return "default";
+        String primaryGroup = user.getPrimaryGroup();
+        if (primaryGroup == null) return "default";
+        return primaryGroup.toLowerCase();
+    }
 
-        String lpcPrefix = user.getCachedData().getMetaData().getPrefix();
+    private String colorize(String text) {
+        if (text == null) return "";
+        return ChatColor.translateAlternateColorCodes('&', text);
+    }
 
-        if (lpcPrefix != null && !lpcPrefix.isEmpty()) {
-            return channelPrefix + " " + lpcPrefix.trim();
-        } else {
-            return channelPrefix;
+    private String formatPrefix(Player player, String channelPrefix) {
+        String prefix = channelPrefix;
+
+        if (useLpcPrefix && luckPermsApi != null) {
+            User user = luckPermsApi.getUserManager().getUser(player.getUniqueId());
+            if (user != null) {
+                String lpcPrefix = user.getCachedData().getMetaData().getPrefix();
+                if (lpcPrefix != null && !lpcPrefix.isEmpty()) {
+                    prefix += " " + lpcPrefix.trim();
+                }
+            }
         }
+
+        String group = getPrimaryGroup(player);
+        String groupPrefix = groupPrefixes.getOrDefault(group, groupPrefixes.getOrDefault("default", ""));
+        prefix += colorize(groupPrefix);
+
+        return prefix;
     }
 
     @EventHandler
@@ -98,12 +151,37 @@ public class AEChannels extends JavaPlugin implements Listener {
 
         event.setCancelled(true);
 
+        // Mention kontrolü
+        if (mentionEnabled) {
+            for (Player p : Bukkit.getOnlinePlayers()) {
+                String mentionTag = "@" + p.getName().toLowerCase();
+                if (message.toLowerCase().contains(mentionTag)) {
+                    // Mesajı placeholder ile işle
+                    String rawMentionMsg = mentionMessage.replace("{player}", sender.getName());
+                    String mentionMsg = placeholderApiEnabled ? PlaceholderAPI.setPlaceholders(p, rawMentionMsg) : ChatColor.translateAlternateColorCodes('&', rawMentionMsg);
+
+                    p.sendMessage(mentionMsg);
+
+                    if (mentionSoundEnabled) {
+                        try {
+                            Sound sound = Sound.valueOf(mentionSoundName.toUpperCase());
+                            p.playSound(p.getLocation(), sound, mentionSoundVolume, mentionSoundPitch);
+                        } catch (IllegalArgumentException ex) {
+                            getLogger().warning("Mention sound is invalid: " + mentionSoundName);
+                        }
+                    }
+                }
+            }
+        }
+
         if (channelOpt.isPresent()) {
             ChatChannel channel = channelOpt.get();
             String msgWithoutSymbol = message.substring(channel.symbol.length()).trim();
 
             String prefix = formatPrefix(sender, channel.prefix);
-            String formatted = prefix + " " + sender.getName() + ": " + msgWithoutSymbol;
+            String rawFormatted = prefix + " " + sender.getName() + ": " + msgWithoutSymbol;
+
+            String formatted = placeholderApiEnabled ? PlaceholderAPI.setPlaceholders(sender, rawFormatted) : rawFormatted;
 
             if (channel.symbol.equals("!")) {
                 Bukkit.getOnlinePlayers().forEach(p -> p.sendMessage(formatted));
@@ -127,10 +205,9 @@ public class AEChannels extends JavaPlugin implements Listener {
 
             if (!activeRegions.isEmpty()) {
                 String prefix = formatPrefix(sender, regionPrefix);
-                String formatted = prefix + " " + sender.getName() + ": " + message;
+                String rawFormatted = prefix + " " + sender.getName() + ": " + message;
                 Set<Player> recipients = new HashSet<>();
 
-                // Konsol komutunu çalıştır
                 if (!regionCommand.isEmpty()) {
                     String cmd = regionCommand.replace("{player}", sender.getName());
                     Bukkit.getScheduler().runTask(this, () -> getServer().dispatchCommand(getServer().getConsoleSender(), cmd));
@@ -146,6 +223,7 @@ public class AEChannels extends JavaPlugin implements Listener {
                 }
 
                 if (!recipients.isEmpty()) {
+                    String formatted = placeholderApiEnabled ? PlaceholderAPI.setPlaceholders(sender, rawFormatted) : rawFormatted;
                     recipients.forEach(p -> p.sendMessage(formatted));
                     return;
                 }
@@ -153,7 +231,8 @@ public class AEChannels extends JavaPlugin implements Listener {
 
             // Bölge yoksa local chat
             String prefix = formatPrefix(sender, localPrefix);
-            String formatted = prefix + " " + sender.getName() + ": " + message;
+            String rawFormatted = prefix + " " + sender.getName() + ": " + message;
+            String formatted = placeholderApiEnabled ? PlaceholderAPI.setPlaceholders(sender, rawFormatted) : rawFormatted;
             sender.getWorld().getPlayers().forEach(p -> p.sendMessage(formatted));
         }
     }

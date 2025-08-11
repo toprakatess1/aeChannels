@@ -3,11 +3,9 @@ main: me.toprak.aechannels.AEChannels
 version: 1.0
 api-version: 1.21
 author: toprakates
-description: Dünya ve bölge bazlı sohbet kanalları, özel prefixler. LPC ve WorldGuard destekli.
+description: Dünya ve bölge bazlı sohbet kanalları, özel prefixler. WorldGuard destekli.
 website: https://github.com/toprakatess1/aeChannels
 depend:
   - WorldGuard
   - WorldEdit
-softdepend:
-  - LuckPerms
-  - LPC
+  - PlaceholderAPI
