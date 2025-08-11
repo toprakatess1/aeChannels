@@ -9,3 +9,7 @@ chatChannels:
     prefix: "[LOCAL]"
   region:
     prefix: "[REGION]"
+    allowed-regions:
+      - region1
+      - region2
+    region-command: "say {player} bölgeye girdi!"

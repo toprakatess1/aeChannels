@@ -5,4 +5,4 @@ api-version: 1.21
 author: toprakates
 description: Dünya ve bölge bazlı sohbet kanalları, özel prefix ve WorldGuard entegrasyonu ile.
 website: https://github.com/toprakatess1/aeChannels
-depend: [WorldGuard]
+depend: [WorldGuard], [WorldEdit]

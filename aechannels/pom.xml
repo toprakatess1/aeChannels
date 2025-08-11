@@ -7,7 +7,7 @@
 
     <groupId>me.toprak</groupId>
     <artifactId>aeChannels</artifactId>
-    <version>1.0-SNAPSHOT</version>
+    <version>1.1-SNAPSHOT</version>
     <name>aeChannels</name>
 
     <repositories>
@@ -34,11 +34,10 @@
         <dependency>
             <groupId>com.sk89q.worldedit</groupId>
             <artifactId>worldedit-bukkit</artifactId>
-            <version>7.4.0-20250706.081142-41</version>
+            <version>7.4.0-SNAPSHOT</version>
             <scope>provided</scope>
         </dependency>
 
-        <!-- WorldGuard -->
         <dependency>
             <groupId>com.sk89q.worldguard</groupId>
             <artifactId>worldguard-bukkit</artifactId>

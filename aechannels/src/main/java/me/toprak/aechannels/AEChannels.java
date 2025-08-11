@@ -1,12 +1,13 @@
 package me.toprak.aechannels;
 
-import com.sk89q.worldedit.util.Location; // WorldEdit'in Location sınıfı
 import com.sk89q.worldedit.bukkit.BukkitAdapter;
+import com.sk89q.worldedit.util.Location;
 import com.sk89q.worldguard.WorldGuard;
 import com.sk89q.worldguard.protection.ApplicableRegionSet;
 import com.sk89q.worldguard.protection.regions.ProtectedRegion;
 import com.sk89q.worldguard.protection.regions.RegionContainer;
 import com.sk89q.worldguard.protection.regions.RegionQuery;
+
 import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
@@ -18,9 +19,11 @@ import java.util.*;
 
 public class AEChannels extends JavaPlugin implements Listener {
 
-    private final Map<String, ChatChannel> chatChannels = new HashMap<>();
+    private Map<String, ChatChannel> chatChannels = new HashMap<>();
     private String localPrefix;
     private String regionPrefix;
+    private List<String> allowedRegions;
+    private String regionCommand;
 
     @Override
     public void onEnable() {
@@ -42,6 +45,9 @@ public class AEChannels extends JavaPlugin implements Listener {
 
         localPrefix = getConfig().getString("chatChannels.local.prefix", "[LOCAL]");
         regionPrefix = getConfig().getString("chatChannels.region.prefix", "[REGION]");
+
+        allowedRegions = getConfig().getStringList("chatChannels.region.allowed-regions");
+        regionCommand = getConfig().getString("chatChannels.region.region-command", "");
     }
 
     @EventHandler
@@ -71,17 +77,30 @@ public class AEChannels extends JavaPlugin implements Listener {
             RegionContainer regionContainer = wg.getPlatform().getRegionContainer();
             RegionQuery query = regionContainer.createQuery();
 
-            Location wgLocation = BukkitAdapter.adapt(sender.getLocation());
-            ApplicableRegionSet regions = query.getApplicableRegions(wgLocation);
+            Location senderPos = BukkitAdapter.adapt(sender.getLocation());
+            ApplicableRegionSet regions = query.getApplicableRegions(senderPos);
 
-            if (regions != null && !regions.getRegions().isEmpty()) {
+            Set<ProtectedRegion> activeRegions = new HashSet<>();
+            for (ProtectedRegion region : regions) {
+                if (allowedRegions.contains(region.getId())) {
+                    activeRegions.add(region);
+                }
+            }
+
+            if (!activeRegions.isEmpty()) {
                 String formatted = regionPrefix + " " + sender.getName() + ": " + message;
                 Set<Player> recipients = new HashSet<>();
 
-                for (ProtectedRegion region : regions) {
+                // Konsol komutunu çalıştır
+                if (!regionCommand.isEmpty()) {
+                    String cmd = regionCommand.replace("{player}", sender.getName());
+                    Bukkit.getScheduler().runTask(this, () -> getServer().dispatchCommand(getServer().getConsoleSender(), cmd));
+                }
+
+                for (ProtectedRegion region : activeRegions) {
                     for (Player p : Bukkit.getOnlinePlayers()) {
-                        Location playerLoc = BukkitAdapter.adapt(p.getLocation());
-                        if (region.contains(playerLoc.getBlockX(), playerLoc.getBlockY(), playerLoc.getBlockZ())) {
+                        Location pPos = BukkitAdapter.adapt(p.getLocation());
+                        if (region.contains(pPos.getBlockX(), pPos.getBlockY(), pPos.getBlockZ())) {
                             recipients.add(p);
                         }
                     }
