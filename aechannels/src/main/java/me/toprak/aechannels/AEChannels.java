@@ -8,6 +8,10 @@ import com.sk89q.worldguard.protection.regions.ProtectedRegion;
 import com.sk89q.worldguard.protection.regions.RegionContainer;
 import com.sk89q.worldguard.protection.regions.RegionQuery;
 
+import net.luckperms.api.LuckPerms;
+import net.luckperms.api.LuckPermsProvider;
+import net.luckperms.api.model.user.User;
+
 import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
@@ -24,6 +28,9 @@ public class AEChannels extends JavaPlugin implements Listener {
     private String regionPrefix;
     private List<String> allowedRegions;
     private String regionCommand;
+    private boolean useLpcPrefix;
+
+    private LuckPerms luckPermsApi;
 
     @Override
     public void onEnable() {
@@ -31,6 +38,15 @@ public class AEChannels extends JavaPlugin implements Listener {
         loadConfig();
         getServer().getPluginManager().registerEvents(this, this);
         getLogger().info("aeChannels enabled!");
+
+        // LuckPerms API instance al
+        try {
+            luckPermsApi = LuckPermsProvider.get();
+            getLogger().info("LuckPerms API found and hooked!");
+        } catch (IllegalStateException e) {
+            luckPermsApi = null;
+            getLogger().warning("LuckPerms API bulunamadı, LPC prefix desteği devre dışı!");
+        }
     }
 
     private void loadConfig() {
@@ -48,6 +64,26 @@ public class AEChannels extends JavaPlugin implements Listener {
 
         allowedRegions = getConfig().getStringList("chatChannels.region.allowed-regions");
         regionCommand = getConfig().getString("chatChannels.region.region-command", "");
+
+        useLpcPrefix = getConfig().getBoolean("chatChannels.use-lpc-prefix", false);
+    }
+
+    // Prefix formatlama fonksiyonu
+    private String formatPrefix(Player player, String channelPrefix) {
+        if (luckPermsApi == null || !useLpcPrefix) {
+            return channelPrefix; // LPC yok veya devre dışı ise sadece kanal prefixi
+        }
+
+        User user = luckPermsApi.getUserManager().getUser(player.getUniqueId());
+        if (user == null) return channelPrefix;
+
+        String lpcPrefix = user.getCachedData().getMetaData().getPrefix();
+
+        if (lpcPrefix != null && !lpcPrefix.isEmpty()) {
+            return channelPrefix + " " + lpcPrefix.trim();
+        } else {
+            return channelPrefix;
+        }
     }
 
     @EventHandler
@@ -65,7 +101,9 @@ public class AEChannels extends JavaPlugin implements Listener {
         if (channelOpt.isPresent()) {
             ChatChannel channel = channelOpt.get();
             String msgWithoutSymbol = message.substring(channel.symbol.length()).trim();
-            String formatted = channel.prefix + " " + sender.getName() + ": " + msgWithoutSymbol;
+
+            String prefix = formatPrefix(sender, channel.prefix);
+            String formatted = prefix + " " + sender.getName() + ": " + msgWithoutSymbol;
 
             if (channel.symbol.equals("!")) {
                 Bukkit.getOnlinePlayers().forEach(p -> p.sendMessage(formatted));
@@ -88,7 +126,8 @@ public class AEChannels extends JavaPlugin implements Listener {
             }
 
             if (!activeRegions.isEmpty()) {
-                String formatted = regionPrefix + " " + sender.getName() + ": " + message;
+                String prefix = formatPrefix(sender, regionPrefix);
+                String formatted = prefix + " " + sender.getName() + ": " + message;
                 Set<Player> recipients = new HashSet<>();
 
                 // Konsol komutunu çalıştır
@@ -113,7 +152,8 @@ public class AEChannels extends JavaPlugin implements Listener {
             }
 
             // Bölge yoksa local chat
-            String formatted = localPrefix + " " + sender.getName() + ": " + message;
+            String prefix = formatPrefix(sender, localPrefix);
+            String formatted = prefix + " " + sender.getName() + ": " + message;
             sender.getWorld().getPlayers().forEach(p -> p.sendMessage(formatted));
         }
     }

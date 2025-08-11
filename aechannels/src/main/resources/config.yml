@@ -1,3 +1,8 @@
+# . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . .
+#
+# aeChannels ((.gg/toprakates for support and suggestions))
+#
+# . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . .
 chatChannels:
   global:
     symbol: "!"
@@ -10,6 +15,17 @@ chatChannels:
   region:
     prefix: "[REGION]"
     allowed-regions:
-      - region1
-      - region2
-    region-command: "say {player} bölgeye girdi!"
+      - örnek_bolge1
+      - örnek_bolge2
+    region-command: "say {player} bölge sohbetine girdi!"
+use-lpc-prefix: true
+
+# If you're using lpc prefix setting as true, plugin will make the prefixes
+# AECHAT-PREFIX + LPC-PREFIX + PLAYER_NAME
+#
+# But else it'll show up like
+# AECHAT-PREFIX + PLAYER_NAME
+#
+# Symbol is that what should people place before the text to send to that specific channel,
+# so if you just send "Hello" to chat you'll send it locally. If you send ". Hello" you'll send it
+# to the trade channel. And If you send "! Hello" that message will show up to everyone.
