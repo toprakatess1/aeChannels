@@ -1,0 +1,11 @@
+chatChannels:
+  global:
+    symbol: "!"
+    prefix: "[GLOBAL]"
+  trade:
+    symbol: "."
+    prefix: "[TİCARET]"
+  local:
+    prefix: "[LOCAL]"
+  region:
+    prefix: "[REGION]"
